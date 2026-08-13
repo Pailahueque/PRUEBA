@@ -22,28 +22,31 @@
         <div id='calendar'></div>
     </div>
 
-    <!-- Script como módulo para importar Firebase -->
+    <!-- Script como módulo para usar Firebase -->
     <script type="module">
-        // 1. Importar Firebase de los servidores de Google
+        // 1. Importaciones usando enlaces directos para HTML/GitHub Pages
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-analytics.js";
         import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-        // 2. PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE (Reemplaza estos datos)
+        // 2. Tu configuración exacta de Firebase
         const firebaseConfig = {
-            apiKey: "TU_API_KEY",
-            authDomain: "tu-proyecto.firebaseapp.com",
-            projectId: "tu-proyecto",
-            storageBucket: "tu-proyecto.appspot.com",
-            messagingSenderId: "123456789",
-            appId: "1:123456789:web:abcdefg"
+            apiKey: "AIzaSyBYJhuTOXp0NlFdzkuIUixlN3xi-_8HAgI",
+            authDomain: "mantencion-5d40b.firebaseapp.com",
+            projectId: "mantencion-5d40b",
+            storageBucket: "mantencion-5d40b.firebasestorage.app",
+            messagingSenderId: "501022345786",
+            appId: "1:501022345786:web:07d101f80a9d6700e50303",
+            measurementId: "G-V8SBH644R6"
         };
 
-        // 3. Inicializar Firebase y Firestore
+        // 3. Inicializar Firebase, Analytics y la Base de Datos (Firestore)
         const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
         const db = getFirestore(app);
         const eventosCollection = collection(db, "requerimientos");
 
-        // 4. Configurar el Calendario
+        // 4. Lógica del Calendario
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('calendar');
             var calendar = new FullCalendar.Calendar(calendarEl, {
@@ -53,7 +56,7 @@
                 editable: true,
                 selectable: true,
 
-                // CARGAR EVENTOS DESDE FIREBASE
+                // LEER EVENTOS DE TU BASE DE DATOS
                 events: async function(info, successCallback, failureCallback) {
                     try {
                         const querySnapshot = await getDocs(eventosCollection);
@@ -73,7 +76,7 @@
                     }
                 },
 
-                // GUARDAR NUEVO EVENTO EN FIREBASE
+                // GUARDAR UN NUEVO EVENTO
                 select: async function(info) {
                     var title = prompt('Ingrese el requerimiento (Ej: Revisión de compresor):');
                     if (title) {
@@ -83,15 +86,16 @@
                                 start: info.startStr,
                                 end: info.endStr
                             });
-                            calendar.refetchEvents(); // Recargar el calendario
+                            calendar.refetchEvents(); 
                         } catch (error) {
                             console.error("Error al guardar:", error);
+                            alert("Hubo un error al guardar. Revisa la consola o las reglas de Firebase.");
                         }
                     }
                     calendar.unselect();
                 },
 
-                // ELIMINAR EVENTO EN FIREBASE
+                // ELIMINAR UN EVENTO
                 eventClick: async function(info) {
                     if (confirm("¿Desea eliminar el requerimiento: '" + info.event.title + "'?")) {
                         try {
