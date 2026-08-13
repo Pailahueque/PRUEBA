@@ -3,31 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agenda de Mantenimiento</title>
+    <title>Gestión de Mantenimiento</title>
     
-    <!-- Librería FullCalendar -->
+    <!-- FullCalendar CSS -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    <!-- Tailwind CSS para un diseño profesional -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librería jsPDF para generar reportes en PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
     <style>
-        body { margin: 40px 10px; font-family: 'Segoe UI', sans-serif; background: #f4f7f6; }
-        #calendar-container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .fc-event { cursor: pointer; background-color: #e67e22 !important; border: none !important; }
+        .fc-event { cursor: pointer; border: none !important; }
     </style>
 </head>
-<body>
+<body class="bg-gray-100 font-sans text-gray-800">
 
-    <h1 style="text-align: center; color: #2c3e50;">Requerimientos de Mantenimiento</h1>
-    
-    <div id="calendar-container">
-        <div id='calendar'></div>
+    <div class="max-w-6xl mx-auto my-8 p-6 bg-white rounded-xl shadow-md">
+        <!-- Cabecera -->
+        <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">Gestión de Requerimientos de Mantenimiento</h1>
+                <p class="text-sm text-gray-500">Panel interno de control y agendamiento</p>
+            </div>
+            <!-- Botón para descargar el reporte PDF -->
+            <button onclick="generarPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium shadow transition flex items-center gap-2">
+                📥 Descargar Reporte PDF
+            </button>
+        </div>
+
+        <!-- Calendario -->
+        <div id='calendar' class="bg-white p-4 rounded-lg"></div>
     </div>
 
-    <!-- Script como módulo con enlaces compatibles para HTML -->
+    <!-- Script de Firebase y lógica de la aplicación -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
-        // Tu configuración exacta ya insertada (sin espacios raros)
+        // Tu configuración de Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyBYJhuTOXp0NlFdzkuIUixlN3xi-_8HAgI",
             authDomain: "mantencion-5d40b.firebaseapp.com",
@@ -42,26 +55,42 @@
         const db = getFirestore(app);
         const eventosCollection = collection(db, "requerimientos");
 
+        // Variable global para usar los datos en el PDF
+        window.listaRequerimientos = [];
+
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('calendar');
             var calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'es',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día' },
                 editable: true,
                 selectable: true,
 
-                // LEER EVENTOS DE FIREBASE
+                // CARGAR REQUERIMIENTOS DESDE FIRESTORE
                 events: async function(info, successCallback, failureCallback) {
                     try {
                         const querySnapshot = await getDocs(eventosCollection);
                         const eventos = [];
-                        querySnapshot.forEach((doc) => {
+                        window.listaRequerimientos = []; // Limpiar para el PDF
+
+                        querySnapshot.forEach((documento) => {
+                            const data = documento.data();
+                            window.listaRequerimientos.push({ id: documento.id, ...data });
+
+                            // Si está finalizado se muestra verde, sino naranja
+                            const colorEvento = data.finalizado ? '#16a34a' : '#e67e22';
+
                             eventos.push({
-                                id: doc.id,
-                                title: doc.data().title,
-                                start: doc.data().start,
-                                end: doc.data().end
+                                id: documento.id,
+                                title: data.title,
+                                start: data.start,
+                                backgroundColor: colorEvento
                             });
                         });
                         successCallback(eventos);
@@ -71,40 +100,111 @@
                     }
                 },
 
-                // GUARDAR NUEVO EVENTO
+                // REGISTRAR NUEVO REQUERIMIENTO CON HORARIO
                 select: async function(info) {
-                    var title = prompt('Ingrese el requerimiento (Ej: Revisión de compresor):');
-                    if (title) {
+                    var titulo = prompt('Ingrese el requerimiento de mantenimiento (Ej: Revisión de compresor):');
+                    if (titulo) {
+                        var hora = prompt('Ingrese la hora exacta (Ej: 09:30):', '08:00');
+                        
+                        // Combinar la fecha seleccionada con la hora ingresada
+                        var fechaHoraInicio = hora ? `${info.startStr}T${hora}:00` : info.startStr;
+
                         try {
                             await addDoc(eventosCollection, {
-                                title: title,
-                                start: info.startStr,
-                                end: info.endStr
+                                title: titulo,
+                                start: fechaHoraInicio,
+                                finalizado: false // Por defecto no está finalizado
                             });
-                            calendar.refetchEvents(); 
-                            alert("¡Guardado correctamente!");
+                            calendar.refetchEvents();
                         } catch (error) {
                             console.error("Error al guardar:", error);
-                            alert("Error al guardar. Revisa la consola (F12).");
+                            alert("Hubo un error al registrar el requerimiento.");
                         }
                     }
                     calendar.unselect();
                 },
 
-                // ELIMINAR EVENTO
+                // OPCIONES AL HACER CLIC EN UN REQUERIMIENTO (Marcar finalizado o Eliminar)
                 eventClick: async function(info) {
-                    if (confirm("¿Desea eliminar el requerimiento: '" + info.event.title + "'?")) {
+                    // Buscar si el evento ya está finalizado en la lista global
+                    const eventoActual = window.listaRequerimientos.find(e => e.id === info.event.id);
+                    const estaFinalizado = eventoActual ? eventoActual.finalizado : false;
+
+                    var accion = prompt(
+                        `Requerimiento: "${info.event.title}"\n\n¿Qué acción desea realizar?\n1. Marcar como ${estaFinalizado ? 'Pendiente' : 'Finalizado'}\n2. Eliminar requerimiento\n\n(Escriba 1 o 2):`
+                    );
+
+                    if (accion === "1") {
+                        // Cambiar estado de finalizado
                         try {
-                            await deleteDoc(doc(db, "requerimientos", info.event.id));
-                            info.event.remove();
+                            const nuevoEstado = !estaFinalizado;
+                            await updateDoc(doc(db, "requerimientos", info.event.id), {
+                                finalizado: nuevoEstado
+                            });
+                            calendar.refetchEvents();
                         } catch (error) {
-                            console.error("Error al eliminar:", error);
+                            console.error("Error al actualizar:", error);
+                        }
+                    } else if (accion === "2") {
+                        if (confirm("¿Está seguro de eliminar permanentemente este requerimiento?")) {
+                            try {
+                                await deleteDoc(doc(db, "requerimientos", info.event.id));
+                                info.event.remove();
+                                calendar.refetchEvents();
+                            } catch (error) {
+                                console.error("Error al eliminar:", error);
+                            }
                         }
                     }
                 }
             });
             calendar.render();
         });
+
+        // FUNCIÓN PARA GENERAR REPORTE EN PDF
+        window.generarPDF = function() {
+            const { jsPDF } = window.jspdf;
+            const docPdf = new jsPDF();
+
+            docPdf.setFont("helvetica", "bold");
+            docPdf.setFontSize(18);
+            docPdf.text("Reporte de Requerimientos de Mantenimiento", 14, 20);
+
+            docPdf.setFontSize(11);
+            docPdf.setFont("helvetica", "normal");
+            docPdf.text(`Fecha de emisión: ${new Date().toLocaleDateString()}`, 14, 28);
+
+            let y = 40;
+            docPdf.setFont("helvetica", "bold");
+            docPdf.text("Descripción / Requerimiento", 14, y);
+            docPdf.text("Fecha y Hora", 110, y);
+            docPdf.text("Estado", 170, y);
+            
+            docPdf.line(14, 33, 196, 33);
+
+            y += 8;
+            docPdf.setFont("helvetica", "normal");
+
+            if (window.listaRequerimientos.length === 0) {
+                docPdf.text("No hay requerimientos registrados.", 14, y);
+            } else {
+                window.listaRequerimientos.forEach(req => {
+                    if (y > 270) { // Salto de página si se llena
+                        docPdf.addPage();
+                        y = 20;
+                    }
+                    const fechaFormateada = req.start.replace('T', '  Hora: ');
+                    const estadoTexto = req.finalizado ? "Finalizado" : "Pendiente";
+
+                    docPdf.text(req.title, 14, y, { maxWidth: 90 });
+                    docPdf.text(fechaFormateada, 110, y);
+                    docPdf.text(estadoTexto, 170, y);
+                    y += 12;
+                });
+            }
+
+            docPdf.save("reporte_mantenimiento.pdf");
+        }
     </script>
 </body>
 </html>
