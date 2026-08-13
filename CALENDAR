@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agenda de Mantenimiento</title>
+    
+    <!-- Librería FullCalendar -->
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
+    
+    <style>
+        body { margin: 40px 10px; font-family: 'Segoe UI', sans-serif; background: #f4f7f6; }
+        #calendar-container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .fc-event { cursor: pointer; background-color: #e67e22 !important; border: none !important; }
+    </style>
+</head>
+<body>
+
+    <h1 style="text-align: center; color: #2c3e50;">Requerimientos de Mantenimiento</h1>
+    
+    <div id="calendar-container">
+        <div id='calendar'></div>
+    </div>
+
+    <!-- Script como módulo para importar Firebase -->
+    <script type="module">
+        // 1. Importar Firebase de los servidores de Google
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // 2. PEGA AQUÍ TU CONFIGURACIÓN DE FIREBASE (Reemplaza estos datos)
+        const firebaseConfig = {
+            apiKey: "TU_API_KEY",
+            authDomain: "tu-proyecto.firebaseapp.com",
+            projectId: "tu-proyecto",
+            storageBucket: "tu-proyecto.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdefg"
+        };
+
+        // 3. Inicializar Firebase y Firestore
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const eventosCollection = collection(db, "requerimientos");
+
+        // 4. Configurar el Calendario
+        document.addEventListener('DOMContentLoaded', function() {
+            var calendarEl = document.getElementById('calendar');
+            var calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                locale: 'es',
+                headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+                editable: true,
+                selectable: true,
+
+                // CARGAR EVENTOS DESDE FIREBASE
+                events: async function(info, successCallback, failureCallback) {
+                    try {
+                        const querySnapshot = await getDocs(eventosCollection);
+                        const eventos = [];
+                        querySnapshot.forEach((doc) => {
+                            eventos.push({
+                                id: doc.id,
+                                title: doc.data().title,
+                                start: doc.data().start,
+                                end: doc.data().end
+                            });
+                        });
+                        successCallback(eventos);
+                    } catch (error) {
+                        console.error("Error al cargar eventos:", error);
+                        failureCallback(error);
+                    }
+                },
+
+                // GUARDAR NUEVO EVENTO EN FIREBASE
+                select: async function(info) {
+                    var title = prompt('Ingrese el requerimiento (Ej: Revisión de compresor):');
+                    if (title) {
+                        try {
+                            await addDoc(eventosCollection, {
+                                title: title,
+                                start: info.startStr,
+                                end: info.endStr
+                            });
+                            calendar.refetchEvents(); // Recargar el calendario
+                        } catch (error) {
+                            console.error("Error al guardar:", error);
+                        }
+                    }
+                    calendar.unselect();
+                },
+
+                // ELIMINAR EVENTO EN FIREBASE
+                eventClick: async function(info) {
+                    if (confirm("¿Desea eliminar el requerimiento: '" + info.event.title + "'?")) {
+                        try {
+                            await deleteDoc(doc(db, "requerimientos", info.event.id));
+                            info.event.remove();
+                        } catch (error) {
+                            console.error("Error al eliminar:", error);
+                        }
+                    }
+                }
+            });
+            calendar.render();
+        });
+    </script>
+</body>
+</html>
