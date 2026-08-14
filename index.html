@@ -4,48 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gestión de Mantenimiento</title>
-    
     <!-- FullCalendar CSS -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js'></script>
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS para un diseño profesional -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librería jsPDF -->
+    <!-- Librería jsPDF para generar reportes en PDF -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    
-    <style>
-        .fc-event { cursor: pointer; border: none !important; }
-    </style>
 </head>
-<body class="bg-gray-100 font-sans text-gray-800">
-
-    <div class="max-w-6xl mx-auto my-8 p-6 bg-white rounded-xl shadow-md">
-        <!-- Cabecera -->
-        <div class="flex flex-col md:flex-row justify-between items-center mb-6 border-b pb-4 gap-4">
+<body class="bg-gray-100 p-6">
+    <div class="max-w-6xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-slate-800">Gestión de Requerimientos de Mantenimiento</h1>
                 <p class="text-sm text-gray-500">Panel interno de control y agendamiento</p>
             </div>
+            <!-- Botón para descargar el reporte PDF -->
             <button onclick="generarPDF()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium shadow transition flex items-center gap-2">
                 📥 Descargar Reporte PDF
             </button>
         </div>
 
-        <!-- Calendario -->
-        <div id='calendar' class="bg-white p-4 rounded-lg"></div>
+        <div id='calendar' class="bg-white p-4 rounded-lg shadow"></div>
     </div>
 
     <!-- VENTANA MODAL (Oculta por defecto) -->
     <div id="modalRequerimiento" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-xl shadow-xl max-w-md w-full mx-4">
             <h3 class="text-lg font-bold text-slate-800 mb-4">Gestionar Requerimiento</h3>
-            
             <input type="hidden" id="modalEventId">
-            
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Descripción del Mantenimiento:</label>
                 <input type="text" id="modalTitleInput" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none">
             </div>
-
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Estado:</label>
                 <select id="modalEstadoSelect" class="w-full border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none">
@@ -53,7 +43,6 @@
                     <option value="true">Finalizado</option>
                 </select>
             </div>
-
             <div class="flex justify-end gap-2 mt-6">
                 <button onclick="cerrarModal()" class="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded-lg font-medium transition">Cancelar</button>
                 <button onclick="eliminarRequerimientoModal()" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-medium transition">Eliminar</button>
@@ -67,25 +56,27 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
         import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
+        // Tu configuración de Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyBYJhuTOXp0NlFdzkuIUixlN3xi-_8HAgI",
             authDomain: "mantencion-5d40b.firebaseapp.com",
             projectId: "mantencion-5d40b",
-            storageBucket: "mantencion-5d40b.firebasestorage.app",
-            messagingSenderId: "501022345786",
-            appId: "1:501022345786:web:07d101f80a9d6700e50303",
-            measurementId: "G-V8SBH644R6"
+            storageBucket: "mantencion-5d40b.appspot.com", // Asegúrate de tener todos los datos de tu consola aquí
+            messagingSenderId: "123456789", // Reemplazar si es necesario
+            appId: "1:123456789:web:abcdef..." // Reemplazar si es necesario
         };
 
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const eventosCollection = collection(db, "requerimientos");
 
+        // Variable global para usar los datos en el PDF
         window.listaRequerimientos = [];
         let calendarGlobal = null;
 
         document.addEventListener('DOMContentLoaded', function() {
             var calendarEl = document.getElementById('calendar');
+            
             calendarGlobal = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 locale: 'es',
@@ -94,7 +85,6 @@
                     center: 'title',
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 },
-                buttonText: { today: 'Hoy', month: 'Mes', week: 'Semana', day: 'Día' },
                 editable: true,
                 selectable: true,
 
@@ -108,19 +98,20 @@
                         querySnapshot.forEach((documento) => {
                             const data = documento.data();
                             window.listaRequerimientos.push({ id: documento.id, ...data });
-
+                            
+                            // Si está finalizado se muestra verde, sino naranja
                             const colorEvento = data.finalizado ? '#16a34a' : '#e67e22';
-
+                            
                             eventos.push({
                                 id: documento.id,
                                 title: data.title,
                                 start: data.start,
-                                backgroundColor: colorEvento
+                                color: colorEvento
                             });
                         });
                         successCallback(eventos);
                     } catch (error) {
-                        console.error("Error al cargar:", error);
+                        console.error("Error al cargar la base de datos:", error);
                         failureCallback(error);
                     }
                 },
@@ -130,8 +121,9 @@
                     var titulo = prompt('Ingrese el requerimiento de mantenimiento (Ej: Revisión de compresor):');
                     if (titulo) {
                         var hora = prompt('Ingrese la hora exacta (Ej: 09:30):', '08:00');
+                        // Combinar la fecha seleccionada con la hora ingresada
                         var fechaHoraInicio = hora ? `${info.startStr}T${hora}:00` : info.startStr;
-
+                        
                         try {
                             await addDoc(eventosCollection, {
                                 title: titulo,
@@ -141,6 +133,7 @@
                             calendarGlobal.refetchEvents();
                         } catch (error) {
                             console.error("Error al guardar:", error);
+                            alert("Hubo un error al registrar el requerimiento.");
                         }
                     }
                     calendarGlobal.unselect();
@@ -150,11 +143,11 @@
                 eventClick: function(info) {
                     const eventoActual = window.listaRequerimientos.find(e => e.id === info.event.id);
                     if (!eventoActual) return;
-
+                    
                     document.getElementById('modalEventId').value = eventoActual.id;
                     document.getElementById('modalTitleInput').value = eventoActual.title;
                     document.getElementById('modalEstadoSelect').value = eventoActual.finalizado ? "true" : "false";
-
+                    
                     document.getElementById('modalRequerimiento').classList.remove('hidden');
                 }
             });
@@ -170,12 +163,12 @@
             const id = document.getElementById('modalEventId').value;
             const nuevoTitulo = document.getElementById('modalTitleInput').value;
             const nuevoEstado = document.getElementById('modalEstadoSelect').value === "true";
-
+            
             if (!nuevoTitulo.trim()) {
                 alert("El título no puede estar vacío.");
                 return;
             }
-
+            
             try {
                 await updateDoc(doc(db, "requerimientos", id), {
                     title: nuevoTitulo,
@@ -206,45 +199,30 @@
         window.generarPDF = function() {
             const { jsPDF } = window.jspdf;
             const docPdf = new jsPDF();
-
-            docPdf.setFont("helvetica", "bold");
-            docPdf.setFontSize(18);
-            docPdf.text("Reporte de Requerimientos de Mantenimiento", 14, 20);
-
-            docPdf.setFontSize(11);
-            docPdf.setFont("helvetica", "normal");
-            docPdf.text(`Fecha de emisión: ${new Date().toLocaleDateString()}`, 14, 28);
-
-            let y = 40;
-            docPdf.setFont("helvetica", "bold");
-            docPdf.text("Descripción / Requerimiento", 14, y);
-            docPdf.text("Fecha y Hora", 110, y);
-            docPdf.text("Estado", 170, y);
             
-            docPdf.line(14, 33, 196, 33);
-
-            y += 8;
-            docPdf.setFont("helvetica", "normal");
-
+            docPdf.setFontSize(18);
+            docPdf.text("Reporte de Mantenimiento", 14, 22);
+            
+            docPdf.setFontSize(12);
+            let y = 35;
+            
             if (window.listaRequerimientos.length === 0) {
                 docPdf.text("No hay requerimientos registrados.", 14, y);
             } else {
                 window.listaRequerimientos.forEach(req => {
-                    if (y > 270) {
+                    if (y > 270) { // Salto de página si se llena
                         docPdf.addPage();
                         y = 20;
                     }
-                    const fechaFormateada = req.start.replace('T', '  Hora: ');
-                    const estadoTexto = req.finalizado ? "Finalizado" : "Pendiente";
-
-                    docPdf.text(req.title, 14, y, { maxWidth: 90 });
-                    docPdf.text(fechaFormateada, 110, y);
-                    docPdf.text(estadoTexto, 170, y);
-                    y += 12;
+                    const estadoText = req.finalizado ? "Finalizado" : "Pendiente";
+                    // Aseguramos que la fecha se lea correctamente omitiendo la "T" de la hora
+                    const fechaAmigable = req.start ? req.start.replace('T', ' ') : 'Sin fecha';
+                    
+                    docPdf.text(`• Tarea: ${req.title} | Fecha: ${fechaAmigable} | Estado: ${estadoText}`, 14, y);
+                    y += 10;
                 });
             }
-
-            docPdf.save("reporte_mantenimiento.pdf");
+            docPdf.save("Reporte_Mantenimiento.pdf");
         }
     </script>
 </body>
