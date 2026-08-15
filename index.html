@@ -607,7 +607,7 @@
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
     const margin = 15, pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
     function header(continuation=false) {
-      pdf.addImage(logo, "jpg", margin, 10, 80, 20);
+      pdf.addImage(LOGO_DATA, "PNG", margin, 10, 80, 20);
       pdf.setFont("helvetica", "bold"); pdf.setFontSize(16);
       pdf.text(continuation ? "Reporte de Mantenimiento — continuación" : "Reporte de Mantenimiento", margin, 40);
       pdf.setFont("helvetica", "normal"); pdf.setFontSize(9);
