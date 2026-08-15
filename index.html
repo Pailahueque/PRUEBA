@@ -9,7 +9,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.18/index.global.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <style>
     :root { --diqb:#0b9f9b; --diqb-dark:#087d79; --orange:#f28c28; }
     body { -webkit-tap-highlight-color: transparent; }
@@ -606,32 +606,93 @@ const LOGO_DATA = "./logo.jpg"
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
     const margin = 15, pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
-    function header(continuation=false) {
-      pdf.addImage(LOGO_DATA, "PNG", margin, 10, 80, 20);
-      pdf.setFont("helvetica", "bold"); pdf.setFontSize(16);
-      pdf.text(continuation ? "Reporte de Mantenimiento — continuación" : "Reporte de Mantenimiento", margin, 40);
-      pdf.setFont("helvetica", "normal"); pdf.setFontSize(9);
-      pdf.text(`Generado: ${new Date().toLocaleString("es-CL")}`, margin, 46);
+
+    function header(continuation = false) {
+        pdf.addImage(LOGO_DATA, "PNG", margin, 10, 80, 20);
+        pdf.setFont("helvetica", "bold"); 
+        pdf.setFontSize(16);
+        pdf.text(continuation ? "Reporte de Mantenimiento — continuación" : "Reporte de Mantenimiento", margin, 40);
+        pdf.setFont("helvetica", "normal"); 
+        pdf.setFontSize(9);
+        pdf.text(`Generado: ${new Date().toLocaleString("es-CL")}`, margin, 46);
     }
+
     header();
-    const total = requerimientos.length, pendientes = requerimientos.filter(x => !x.finalizado).length, finalizados = requerimientos.filter(x => x.finalizado).length;
-    pdf.setFontSize(10); pdf.text(`Total: ${total}    Pendientes: ${pendientes}    Finalizados: ${finalizados}`, margin, 54);
-    let y = 64, lineH = 7, contentW = pageW - 2 * margin;
-    if (!requerimientos.length) pdf.text("No hay requerimientos registrados.", margin, y);
-    requerimientos.forEach((req, i) => {
-      const estado = req.finalizado ? "Finalizado" : "Pendiente";
-      const fecha = req.start ? req.start.replace("T", " ").slice(0,16) : "Sin fecha";
-      const dur = formatDuration(calculateDurationMin(req));
-      const finalizador = req.finalizadoByEmail ? ` | Cerrado por: ${req.finalizadoByEmail}` : "";
-      const text = `${i+1}. ${req.title} | Inicio: ${fecha} | Duración: ${dur} | Estado: ${estado}${finalizador}`;
-      const lines = pdf.splitTextToSize(text, contentW);
-      if (y + lines.length * lineH > pageH - 18) { pdf.addPage(); header(true); y = 50; }
-      pdf.setFont("helvetica", "normal"); pdf.setFontSize(9.5); pdf.text(lines, margin, y); y += lines.length * lineH + 3;
-    });
+
+    const total = requerimientos.length;
+    const pendientes = requerimientos.filter(x => !x.finalizado).length;
+    const finalizados = requerimientos.filter(x => x.finalizado).length;
+
+    pdf.setFontSize(10);
+    pdf.text(`Total: ${total}    Pendientes: ${pendientes}    Finalizados: ${finalizados}`, margin, 54);
+
+    if (!requerimientos.length) {
+        pdf.text("No hay requerimientos registrados.", margin, 64);
+    } else {
+        // Mapear los datos para la tabla
+        const tableBody = requerimientos.map((req, i) => {
+            const estado = req.finalizado ? "Finalizado" : "Pendiente";
+            const fecha = req.start ? req.start.replace("T", " ").slice(0, 16) : "Sin fecha";
+            const dur = formatDuration(calculateDurationMin(req));
+            const finalizador = req.finalizadoByEmail ? `\nCerrado por: ${req.finalizadoByEmail}` : "";
+            
+            return [
+                i + 1,
+                req.title,
+                fecha,
+                dur,
+                estado + finalizador
+            ];
+        });
+
+        // Generar tabla usando jspdf-autotable
+        pdf.autoTable({
+            startY: 60,
+            head: [["N°", "Requerimiento", "Inicio", "Duración", "Estado"]],
+            body: tableBody,
+            margin: { left: margin, right: margin },
+            headStyles: {
+                fillColor: [41, 128, 185], // Color azul institucional para la cabecera
+                textColor: 255,
+                fontStyle: "bold",
+                halign: "center"
+            },
+            bodyStyles: {
+                textColor: 50,
+                fontSize: 9
+            },
+            alternateRowStyles: {
+                fillColor: [245, 247, 250] // Color gris muy suave para filas alternadas
+            },
+            columnStyles: {
+                0: { cellWidth: 10, halign: "center" },
+                1: { cellWidth: 65 },
+                2: { cellWidth: 32, halign: "center" },
+                3: { cellWidth: 25, halign: "center" },
+                4: { cellWidth: 48 }
+            },
+            didDrawPage: (data) => {
+                // Si la tabla salta de página, repetimos el encabezado personalizado del reporte
+                if (data.pageNumber > 1) {
+                    header(true);
+                }
+            }
+        });
+    }
+
+    // Pie de página para todas las páginas generadas
     const pages = pdf.getNumberOfPages();
-    for (let p=1; p<=pages; p++) { pdf.setPage(p); pdf.setFontSize(8); pdf.setTextColor(110); pdf.text("Departamento de Ingeniería Química y Bioprocesos · USACH", margin, pageH-8); pdf.text(`Página ${p} de ${pages}`, pageW-margin-22, pageH-8); pdf.setTextColor(0); }
+    for (let p = 1; p <= pages; p++) {
+        pdf.setPage(p);
+        pdf.setFontSize(8);
+        pdf.setTextColor(110);
+        pdf.text("Departamento de Ingeniería Química y Bioprocesos · USACH", margin, pageH - 8);
+        pdf.text(`Página ${p} de ${pages}`, pageW - margin - 22, pageH - 8);
+        pdf.setTextColor(0);
+    }
+
     pdf.save("Reporte_Mantenimiento_USACH.pdf");
-  });
+});
 </script>
 </body>
 </html>
