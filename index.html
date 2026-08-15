@@ -1,70 +1,360 @@
-// --- GENERACIÓN DEL PDF CORREGIDA Y ROBUSTA ---
-$('btnPDF').addEventListener('click', async () => {
-  try {
-    const btn = $('btnPDF');
-    const originalText = btn.textContent;
-    btn.textContent = "Generando...";
-    btn.disabled = true;
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0b9f9b">
+  <title>Gestión de Mantenimiento | DIQB - USACH</title>
 
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
-    
-    // 1. Intentar cargar el logo de forma segura (Opcional: Reemplaza 'logo.jpg' por tu Base64 si persiste el problema de CORS)
-    try {
-      // Si usas un servidor local (Live Server), asegúrate de que 'logo.jpg' esté en la misma carpeta.
-      const logoBase64 = await getBase64Image('logo.jpg');
-      doc.addImage(logoBase64, 'JPEG', 14, 10, 65, 20); 
-    } catch (err) {
-      console.warn("Aviso: No se pudo cargar el logo (posible bloqueo CORS o archivo no encontrado). El PDF se generará sin logo.", err);
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.18/index.global.min.js"></script>
+  
+  <!-- Dependencias para PDF optimizadas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+  <style>
+    :root { --diqb:#0b9f9b; --diqb-dark:#087d79; --orange:#f28c28; }
+    body { -webkit-tap-highlight-color: transparent; }
+    button, input, select { touch-action: manipulation; }
+    .fc { --fc-button-bg-color: var(--diqb); --fc-button-border-color: var(--diqb);
+          --fc-button-hover-bg-color: var(--diqb-dark); --fc-button-hover-border-color: var(--diqb-dark);
+          --fc-button-active-bg-color: var(--diqb-dark); --fc-button-active-border-color: var(--diqb-dark);
+          --fc-today-bg-color: rgba(11,159,155,.10); }
+    .fc .fc-toolbar { gap: .5rem; flex-wrap: wrap; }
+    .fc .fc-toolbar-title { font-size: clamp(1rem, 3vw, 1.4rem); }
+    .fc .fc-button { min-height: 40px; }
+    .fc .fc-daygrid-day-number { padding: 6px; }
+    .fc-event { cursor: pointer; border-radius: 5px; padding: 2px 4px; }
+    .modal-scroll { max-height: min(88vh, 760px); overflow-y: auto; }
+    @media (max-width: 640px) {
+      body { padding: .75rem !important; }
+      .fc .fc-toolbar { display: grid; grid-template-columns: 1fr; }
+      .fc .fc-toolbar-chunk { display:flex; justify-content:center; flex-wrap:wrap; gap:.25rem; }
+      .fc .fc-toolbar-title { text-align:center; margin:.25rem 0; }
+      .fc .fc-button { padding: .45rem .55rem; font-size: .78rem; }
+      .fc .fc-col-header-cell-cushion, .fc .fc-daygrid-day-number { font-size:.78rem; }
+      .fc .fc-timegrid-slot-label { font-size:.72rem; }
+      .fc .fc-event-title { white-space:normal; }
     }
+  </style>
+</head>
 
-    // 2. Textos de Cabecera
-    doc.setFontSize(16);
-    doc.setTextColor(11, 159, 155); 
-    doc.text("Reporte de Requerimientos de Mantenimiento", 14, 42);
+<body class="bg-slate-100 min-h-screen p-3 sm:p-6">
+  <!-- AUTENTICACIÓN -->
+  <div id="loginScreen" class="fixed inset-0 z-[100] bg-slate-100 flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+      <div class="p-5 sm:p-7 border-b border-slate-200 text-center">
+        <h2 class="text-xl font-bold text-slate-800">Acceso al sistema</h2>
+        <p class="text-sm text-slate-500 mt-1">Gestión de requerimientos de mantenimiento</p>
+      </div>
+      <form id="loginForm" class="p-5 sm:p-7 space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Correo electrónico</label>
+          <input id="loginEmail" type="email" required autocomplete="username" class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b]">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Contraseña</label>
+          <input id="loginPassword" type="password" required autocomplete="current-password" class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b]">
+        </div>
+        <div id="loginError" class="hidden bg-red-50 text-red-700 border border-red-200 rounded-xl p-3 text-sm"></div>
+        <button type="submit" class="w-full bg-[#0b9f9b] hover:bg-[#087d79] text-white px-4 py-3 rounded-xl font-semibold">Ingresar</button>
+      </form>
+    </div>
+  </div>
 
-    const fechaGeneracion = new Date().toLocaleDateString('es-CL');
-    doc.setFontSize(11);
-    doc.setTextColor(100);
-    doc.text(`Generado el: ${fechaGeneracion} | Total: ${currentEventsData.length}`, 14, 49);
+  <main class="max-w-7xl mx-auto">
+    <!-- ENCABEZADO -->
+    <header class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 sm:p-6 mb-4">
+      <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div class="flex items-center gap-4 min-w-0">
+          <div class="hidden lg:block border-l border-slate-200 pl-4">
+            <h1 class="text-xl font-bold text-slate-800">Gestión de Mantenimiento</h1>
+            <p class="text-sm text-slate-500">Panel de control y agendamiento</p>
+            <div class="mt-2 text-xs text-slate-500">Usuario: <span id="currentUserEmail" class="font-semibold text-slate-700"></span></div>
+          </div>
+        </div>
 
-    // 3. Validar si existen datos para la tabla
-    const tableData = currentEventsData.length > 0 ? currentEventsData.map(ev => {
-      let fechaParseada = ev.start || 'Sin fecha';
-      try {
-        const d = new Date(ev.start);
-        if (!isNaN(d.getTime())) {
-          fechaParseada = d.toLocaleString('es-CL', { 
-            year: 'numeric', month: '2-digit', day: '2-digit', 
-            hour: '2-digit', minute: '2-digit' 
-          });
-        }
-      } catch(e) {}
+        <div class="flex flex-col sm:flex-row gap-2 w-full lg:w-auto">
+          <button id="btnNuevo" class="flex-1 sm:flex-none bg-[#0b9f9b] hover:bg-[#087d79] text-white px-4 py-3 rounded-xl font-semibold shadow-sm transition">
+            + Nuevo requerimiento
+          </button>
+          <button id="btnPDF" class="flex-1 sm:flex-none bg-slate-800 hover:bg-slate-900 text-white px-4 py-3 rounded-xl font-semibold shadow-sm transition">
+            Generar PDF
+          </button>
+          <button id="btnLogout" class="flex-1 sm:flex-none bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-3 rounded-xl font-semibold shadow-sm transition">
+            Salir
+          </button>
+        </div>
+      </div>
+    </header>
 
-      const estado = ev.extendedProps?.status === "true" || ev.extendedProps?.status === true ? 'Finalizado' : 'Pendiente';
-      return [ ev.title || 'Sin descripción', fechaParseada, estado, `${ev.extendedProps?.duration || 'N/A'} min` ];
-    }) : [['No hay requerimientos registrados', '-', '-', '-']];
+    <!-- RESUMEN -->
+    <section class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <p class="text-xs uppercase tracking-wide text-slate-500">Total</p>
+        <p id="totalCount" class="text-2xl font-bold text-slate-800">0</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <p class="text-xs uppercase tracking-wide text-slate-500">Pendientes</p>
+        <p id="pendingCount" class="text-2xl font-bold text-orange-600">0</p>
+      </div>
+      <div class="bg-white rounded-xl p-4 border border-slate-200 shadow-sm">
+        <p class="text-xs uppercase tracking-wide text-slate-500">Finalizados</p>
+        <p id="doneCount" class="text-2xl font-bold text-emerald-600">0</p>
+      </div>
+    </section>
 
-    // 4. Dibujar la tabla
-    doc.autoTable({
-      startY: 56,
-      head: [['Descripción del Mantenimiento', 'Fecha y Hora', 'Estado', 'Duración']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [11, 159, 155] },
-      styles: { fontSize: 10, cellPadding: 4 },
-      alternateRowStyles: { fillColor: [245, 245, 245] }
+    <!-- CALENDARIO -->
+    <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 sm:p-4">
+      <div id="status" class="hidden mb-3 rounded-lg px-3 py-2 text-sm"></div>
+      <div id="calendar"></div>
+    </section>
+  </main>
+
+  <!-- MODAL -->
+  <div id="modal" class="fixed inset-0 z-50 hidden bg-black/50 p-3 sm:p-6 items-center justify-center">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl modal-scroll">
+      <div class="sticky top-0 bg-white border-b border-slate-200 p-4 sm:p-5 flex items-center justify-between">
+        <h2 id="modalTitle" class="text-lg sm:text-xl font-bold text-slate-800">Nuevo requerimiento</h2>
+        <button id="btnClose" class="w-10 h-10 rounded-full hover:bg-slate-100 text-slate-500 text-xl" aria-label="Cerrar">×</button>
+      </div>
+      <form id="formReq" class="p-4 sm:p-5 space-y-4">
+        <input type="hidden" id="eventId">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1">Descripción del mantenimiento</label>
+          <textarea id="titleInput" required rows="3" placeholder="Ej.: Revisar bomba de vacío del laboratorio..." class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b] resize-none"></textarea>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Fecha</label>
+            <input id="dateInput" type="date" required class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b]">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Hora</label>
+            <input id="timeInput" type="time" value="08:00" class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b]">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Duración del servicio</label>
+            <select id="durationInput" class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b]">
+              <option value="60" selected>1 hora</option>
+              <option value="120">2 horas</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1">Estado</label>
+            <select id="statusInput" class="w-full border border-slate-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#0b9f9b]">
+              <option value="false">Pendiente</option>
+              <option value="true">Finalizado</option>
+            </select>
+          </div>
+        </div>
+        <div class="flex flex-col-reverse sm:flex-row sm:justify-between gap-2 pt-2">
+          <button type="button" id="btnDelete" class="hidden bg-red-50 hover:bg-red-100 text-red-700 px-4 py-3 rounded-xl font-semibold">Eliminar</button>
+          <div class="flex flex-col sm:flex-row gap-2 sm:ml-auto">
+            <button type="button" id="btnCancel" class="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold">Cancelar</button>
+            <button type="submit" class="px-4 py-3 rounded-xl bg-[#0b9f9b] hover:bg-[#087d79] text-white font-semibold">Guardar</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
+  import {
+    getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, getDoc, onSnapshot, serverTimestamp, deleteField
+  } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBYJhuTOXp0NlFdzkuIUixlN3xi-_8HAgI",
+    authDomain: "mantencion-5d40b.firebaseapp.com",
+    projectId: "mantencion-5d40b",
+    storageBucket: "mantencion-5d40b.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const eventosCollection = collection(db, "requerimientos");
+
+  const $ = id => document.getElementById(id);
+  
+  let currentEventsData = [];
+  let calendar;
+
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      $('loginScreen').style.display = 'none';
+      $('currentUserEmail').textContent = user.email;
+      initCalendar();
+      fetchEvents();
+    } else {
+      $('loginScreen').style.display = 'flex';
+    }
+  });
+
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await signInWithEmailAndPassword(auth, $('loginEmail').value, $('loginPassword').value);
+    } catch (error) {
+      $('loginError').textContent = "Credenciales incorrectas.";
+      $('loginError').style.display = 'block';
+    }
+  });
+
+  $('btnLogout').addEventListener('click', () => signOut(auth));
+
+  function initCalendar() {
+    if(calendar) return;
+    calendar = new FullCalendar.Calendar($('calendar'), {
+      initialView: window.innerWidth < 640 ? 'listWeek' : 'dayGridMonth',
+      locale: 'es',
+      headerToolbar: {
+        left: 'prev,next today',
+        center: 'title',
+        right: 'dayGridMonth,timeGridWeek,listWeek'
+      },
+      events: []
     });
-
-    doc.save(`Requerimientos_Mantenimiento_${fechaGeneracion.replace(/\//g,'-')}.pdf`);
-
-    btn.textContent = originalText;
-    btn.disabled = false;
-
-  } catch (error) {
-    console.error("Error fatal al generar PDF:", error);
-    alert("Hubo un error al generar el documento. Revisa la consola para más detalles.");
-    $('btnPDF').textContent = "Generar PDF";
-    $('btnPDF').disabled = false;
+    calendar.render();
   }
-});
+
+  function fetchEvents() {
+    onSnapshot(eventosCollection, (snapshot) => {
+      let events = [], pending = 0, done = 0;
+
+      snapshot.forEach(doc => {
+        const data = doc.data();
+        const isDone = data.status === "true" || data.status === true;
+        isDone ? done++ : pending++;
+        
+        events.push({
+          id: doc.id,
+          title: data.title,
+          start: data.date + (data.time ? 'T' + data.time : ''),
+          backgroundColor: isDone ? '#059669' : '#f59e0b',
+          borderColor: isDone ? '#059669' : '#f59e0b',
+          extendedProps: { status: data.status, duration: data.duration }
+        });
+      });
+
+      currentEventsData = events;
+      $('totalCount').textContent = events.length;
+      $('pendingCount').textContent = pending;
+      $('doneCount').textContent = done;
+
+      if(calendar) {
+        calendar.removeAllEvents();
+        calendar.addEventSource(events);
+      }
+    });
+  }
+
+  // --- FUNCIÓN AUXILIAR PARA CARGAR EL LOGO ---
+  function getBase64Image(imgUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg"));
+      };
+      img.onerror = (e) => reject(e);
+      img.src = imgUrl;
+    });
+  }
+
+  // --- GENERACIÓN DEL PDF CORREGIDA Y ROBUSTA ---
+  $('btnPDF').addEventListener('click', async () => {
+    try {
+      const btn = $('btnPDF');
+      const originalText = btn.textContent;
+      btn.textContent = "Generando...";
+      btn.disabled = true;
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      
+      // 1. Intentar cargar el logo de forma segura
+      try {
+        const logoBase64 = await getBase64Image('logo.jpg');
+        doc.addImage(logoBase64, 'JPEG', 14, 10, 65, 20); 
+      } catch (err) {
+        console.warn("Aviso: No se pudo cargar el logo (posible bloqueo CORS o archivo no encontrado). El PDF se generará sin logo.", err);
+      }
+
+      // 2. Textos de Cabecera
+      doc.setFontSize(16);
+      doc.setTextColor(11, 159, 155); 
+      doc.text("Reporte de Requerimientos de Mantenimiento", 14, 42);
+
+      const fechaGeneracion = new Date().toLocaleDateString('es-CL');
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      doc.text(`Generado el: ${fechaGeneracion} | Total: ${currentEventsData.length}`, 14, 49);
+
+      // 3. Validar si existen datos para la tabla
+      const tableData = currentEventsData.length > 0 ? currentEventsData.map(ev => {
+        let fechaParseada = ev.start || 'Sin fecha';
+        try {
+          const d = new Date(ev.start);
+          if (!isNaN(d.getTime())) {
+            fechaParseada = d.toLocaleString('es-CL', { 
+              year: 'numeric', month: '2-digit', day: '2-digit', 
+              hour: '2-digit', minute: '2-digit' 
+            });
+          }
+        } catch(e) {}
+
+        const estado = ev.extendedProps?.status === "true" || ev.extendedProps?.status === true ? 'Finalizado' : 'Pendiente';
+        return [ ev.title || 'Sin descripción', fechaParseada, estado, `${ev.extendedProps?.duration || 'N/A'} min` ];
+      }) : [['No hay requerimientos registrados', '-', '-', '-']];
+
+      // 4. Dibujar la tabla
+      doc.autoTable({
+        startY: 56,
+        head: [['Descripción del Mantenimiento', 'Fecha y Hora', 'Estado', 'Duración']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [11, 159, 155] },
+        styles: { fontSize: 10, cellPadding: 4 },
+        alternateRowStyles: { fillColor: [245, 245, 245] }
+      });
+
+      doc.save(`Requerimientos_Mantenimiento_${fechaGeneracion.replace(/\//g,'-')}.pdf`);
+
+      btn.textContent = originalText;
+      btn.disabled = false;
+
+    } catch (error) {
+      console.error("Error fatal al generar PDF:", error);
+      alert("Hubo un error al generar el documento. Revisa la consola para más detalles.");
+      $('btnPDF').textContent = "Generar PDF";
+      $('btnPDF').disabled = false;
+    }
+  });
+
+  // Funciones complementarias del Modal
+  $('btnNuevo').addEventListener('click', () => {
+    $('modal').style.display = 'flex';
+    $('formReq').reset();
+    $('eventId').value = '';
+  });
+
+  $('btnClose').addEventListener('click', () => $('modal').style.display = 'none');
+  $('btnCancel').addEventListener('click', () => $('modal').style.display = 'none');
+
+</script>
+</body>
+</html>
